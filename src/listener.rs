@@ -3,6 +3,7 @@ use crate::streamkey::{Gatekeeper, Streamkey};
 use access_unit::AccessUnit;
 use bytes::Bytes;
 use discovery::Nodes;
+use futures::stream;
 use futures::{SinkExt, StreamExt};
 use srt_tokio::{SrtListener, SrtSocket};
 use std::collections::HashSet;
@@ -250,8 +251,15 @@ impl SRTListener {
                                             select! {
                                                 result = timeout(Duration::from_secs(TIMEOUT_SECS), srt_socket.next()) => {
                                                     match result {
-                                                        Ok(Some(Ok(data))) => {
-                                                            let bytes = Bytes::from(data.1);
+                                                       Ok(Some(Ok((instant, data)))) => {
+                                                            // Wrap the received data into a stream
+                                                            let stream = stream::once(async {
+                                                                Ok((Instant::now(), data.clone()))
+                                                            });
+                                                            if let Err(e) = srt_socket.send_all(&mut stream.boxed()).await {
+                                                                eprintln!("Failed to send data: {}", e);
+                                                           }
+                                                            let bytes = Bytes::from(data);
                                                             i = i.wrapping_add(1);
 
                                                             if i%METRICS_INTERVAL == 0 {

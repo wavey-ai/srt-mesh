@@ -1,9 +1,9 @@
 use base64::engine::general_purpose::STANDARD as base64_engine;
 use base64::Engine;
+use gen_id::{ConfigPreset::ShortEpochMaxNodes, IdGenerator, DEFAULT_EPOCH};
 use hmac::{Hmac, Mac};
 use rustls::{Certificate, PrivateKey};
 use sha2::Sha256;
-use sonyflake::Sonyflake;
 use std::error::Error;
 use tls_helpers::privkey_from_base64;
 
@@ -29,13 +29,13 @@ impl Streamkey {
     }
 }
 pub struct Gatekeeper {
-    snowflakes: Sonyflake,
+    snowflakes: IdGenerator,
     private_key: PrivateKey,
 }
 
 impl Gatekeeper {
     pub fn new(base64_encoded_pem_key: &str) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let snowflakes = Sonyflake::new()?;
+        let snowflakes = IdGenerator::new(ShortEpochMaxNodes, DEFAULT_EPOCH);
         let private_key = privkey_from_base64(base64_encoded_pem_key)?;
 
         Ok(Self {
@@ -59,7 +59,7 @@ impl Gatekeeper {
         } else {
             // TODO: check provided key is a steam key in the allow list
             stream_key = maybe_encoded_key.to_string();
-            stream_id = self.snowflakes.next_id().unwrap();
+            stream_id = self.snowflakes.next_id(1);
             origin = true;
         }
         Ok(Streamkey {
